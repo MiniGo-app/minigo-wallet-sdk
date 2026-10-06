@@ -1,0 +1,19 @@
+<!doctype html>
+<html><head><meta charset="utf-8" /><link rel="stylesheet" href="style.css" /><style>body{width:340px}</style></head>
+<body><main>
+  <header><div class="mark">M</div><div><h1>MiniGo Wallet</h1><span class="pill">Testnet</span></div></header>
+  <section class="card">
+    <span class="muted">Balance</span>
+    <div class="big" id="balance">…</div>
+    <div class="mono" id="address"></div>
+    <div class="actions"><button id="copy">Copy address</button><button id="fund" class="primary">Get test XLM</button></div>
+  </section>
+  <section class="card">
+    <div class="row"><strong>Answer as Freighter</strong><input type="checkbox" id="compat" /></div>
+    <span class="muted">Lets dApps that only support Freighter use MiniGo. Leave off if you also have Freighter installed. Reload open pages after changing.</span>
+  </section>
+  <section class="card">
+    <strong>Connected sites</strong>
+    <ul id="sites"><li class="muted">None yet</li></ul>
+  </section>
+</main><script src="popup.js"></script></body></html>

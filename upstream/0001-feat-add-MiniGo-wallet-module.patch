@@ -1,0 +1,489 @@
+From 3d4fcbe33c64fc476a45e4ef581f8de874a43d7b Mon Sep 17 00:00:00 2001
+From: MiniGo <dev@minigo.app>
+Date: Mon, 28 Sep 2026 17:05:24 +0000
+Subject: [PATCH] feat: add MiniGo wallet module
+
+MiniGo injects a SEP-43 provider as window.mini (in its mobile in-app
+browser and its browser extension) with a window.stellar sentinel
+{ provider: "minigo" }. The module talks to it directly, waits briefly
+for the minigo#initialized event, unwraps SEP-43 { error } results into
+rejections, and reports itself as the platform wrapper inside the app.
+
+No extra dependencies or polyfills. Included in defaultModules() and
+sep43Modules().
+---
+ CHANGELOG.md                            |   6 +
+ docs/files/wallets/supported-wallets.md |   1 +
+ src/build_npm.ts                        |   4 +
+ src/deno.json                           |   1 +
+ src/deno.lock                           |  12 +-
+ src/sdk/modules/minigo.module.test.ts   | 141 +++++++++++++++++++
+ src/sdk/modules/minigo.module.ts        | 175 ++++++++++++++++++++++++
+ src/sdk/modules/utils.ts                |   3 +
+ 8 files changed, 341 insertions(+), 2 deletions(-)
+ create mode 100644 src/sdk/modules/minigo.module.test.ts
+ create mode 100644 src/sdk/modules/minigo.module.ts
+
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index d4360f0..f501b74 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -3,6 +3,12 @@
+ All notable changes to this project will be documented in this file.
+ See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
+ 
++### Unreleased
++
++### Add
++
++- Add MiniGo wallet module (`MiniGoModule`, `/modules/minigo`), included in `defaultModules()` and `sep43Modules()`
++
+ ### 2.7.0 (2026-09-23)
+ 
+ ### Change
+diff --git a/docs/files/wallets/supported-wallets.md b/docs/files/wallets/supported-wallets.md
+index 37bc61e..29508c0 100644
+--- a/docs/files/wallets/supported-wallets.md
++++ b/docs/files/wallets/supported-wallets.md
+@@ -18,6 +18,7 @@ These are the current supported wallets/modules:
+ | OneKey         | OneKeyModule        | /onekey         | Yes          |
+ | Bitget         | BitgetModule        | /bitget         | Yes          |
+ | GHOSTSIG       | GhostsigModule      | /ghostsig       | Yes          |
++| MiniGo         | MiniGoModule        | /minigo         | Yes          |
+ 
+ ## How to import a wallet's module?
+ 
+diff --git a/src/build_npm.ts b/src/build_npm.ts
+index ffb9441..e9ff09c 100644
+--- a/src/build_npm.ts
++++ b/src/build_npm.ts
+@@ -112,6 +112,10 @@ await build({
+       name: "./modules/dcent",
+       path: "./sdk/modules/dcent.module.ts",
+     },
++    {
++      name: "./modules/minigo",
++      path: "./sdk/modules/minigo.module.ts",
++    },
+     {
+       name: "./modules/utils",
+       path: "./sdk/modules/utils.ts",
+diff --git a/src/deno.json b/src/deno.json
+index fa932ed..b92f484 100644
+--- a/src/deno.json
++++ b/src/deno.json
+@@ -57,6 +57,7 @@
+     "./modules/xbull": "./sdk/modules/xbull.module.ts",
+     "./modules/cactuslink": "./sdk/modules/cactuslink.module.ts",
+     "./modules/dcent": "./sdk/modules/dcent.module.ts",
++    "./modules/minigo": "./sdk/modules/minigo.module.ts",
+     "./modules/metamask": "./sdk/modules/metamask.module.ts",
+     "./modules/utils": "./sdk/modules/utils.ts"
+   },
+diff --git a/src/deno.lock b/src/deno.lock
+index 3ae944c..0c1a06c 100644
+--- a/src/deno.lock
++++ b/src/deno.lock
+@@ -3,10 +3,12 @@
+   "specifiers": {
+     "jsr:@david/code-block-writer@^13.0.3": "13.0.3",
+     "jsr:@deno/dnt@0.43.2": "0.43.2",
++    "jsr:@std/assert@1": "1.0.19",
+     "jsr:@std/bytes@1.0.6": "1.0.6",
+     "jsr:@std/encoding@1.0.11": "1.0.11",
+     "jsr:@std/fmt@1": "1.0.10",
+     "jsr:@std/fs@1": "1.0.24",
++    "jsr:@std/internal@^1.0.12": "1.0.14",
+     "jsr:@std/internal@^1.0.14": "1.0.14",
+     "jsr:@std/path@1": "1.1.6",
+     "jsr:@std/path@^1.1.5": "1.1.6",
+@@ -48,6 +50,12 @@
+         "jsr:@ts-morph/bootstrap"
+       ]
+     },
++    "@std/assert@1.0.19": {
++      "integrity": "eaada96ee120cb980bc47e040f82814d786fe8162ecc53c91d8df60b8755991e",
++      "dependencies": [
++        "jsr:@std/internal@^1.0.12"
++      ]
++    },
+     "@std/bytes@1.0.6": {
+       "integrity": "f6ac6adbd8ccd99314045f5703e23af0a68d7f7e58364b47d2c7f408aeb5820a"
+     },
+@@ -60,7 +68,7 @@
+     "@std/fs@1.0.24": {
+       "integrity": "f3061b45b81673a2bece689da041df32d174be064c89eb6397fb5718d3fb7877",
+       "dependencies": [
+-        "jsr:@std/internal",
++        "jsr:@std/internal@^1.0.14",
+         "jsr:@std/path@^1.1.5"
+       ]
+     },
+@@ -70,7 +78,7 @@
+     "@std/path@1.1.6": {
+       "integrity": "c68485c2a4dfbb5ae3cc74fae4e8c4e5d874cf8a8ed12927917235c758b46cbe",
+       "dependencies": [
+-        "jsr:@std/internal"
++        "jsr:@std/internal@^1.0.14"
+       ]
+     },
+     "@ts-morph/bootstrap@0.29.0": {
+diff --git a/src/sdk/modules/minigo.module.test.ts b/src/sdk/modules/minigo.module.test.ts
+new file mode 100644
+index 0000000..89b8acc
+--- /dev/null
++++ b/src/sdk/modules/minigo.module.test.ts
+@@ -0,0 +1,141 @@
++/// <reference lib="deno.ns" />
++import { assertEquals, assertRejects } from "jsr:@std/assert@1";
++import { MiniGoModule } from "./minigo.module.ts";
++
++// deno-lint-ignore no-explicit-any
++const g = globalThis as any;
++
++interface FakeWin extends EventTarget {
++  stellar?: { provider: string; platform: string; version: string };
++  mini?: Record<string, unknown>;
++}
++
++function makeWindow(): FakeWin {
++  const win = new EventTarget() as FakeWin;
++  g.window = win;
++  return win;
++}
++
++function clearWindow(): void {
++  delete g.window;
++}
++
++const SENTINEL = { provider: "minigo", platform: "mobile", version: "0.1.0" } as const;
++const ADDRESS = "GBXFXNDLV4LSWA4VB7YIL5GBD7BVNR22SGBTDKMO2SBZZHDXSKZYCP7L";
++
++function provider(overrides: Record<string, unknown> = {}): Record<string, unknown> {
++  return {
++    isMiniGo: true,
++    isConnected: () => Promise.resolve({ isConnected: true }),
++    requestAccess: () => Promise.resolve({ address: ADDRESS }),
++    getAddress: () => Promise.resolve({ address: ADDRESS }),
++    signTransaction: (xdr: string) => Promise.resolve({ signedTxXdr: `${xdr}+sig`, signerAddress: ADDRESS }),
++    signAuthEntry: () => Promise.resolve({ signedAuthEntry: "c2ln", signerAddress: ADDRESS }),
++    signMessage: () => Promise.resolve({ signedMessage: "c2ln", signerAddress: ADDRESS }),
++    getNetwork: () => Promise.resolve({ network: "TESTNET", networkPassphrase: "Test SDF Network ; September 2015" }),
++    ...overrides,
++  };
++}
++
++Deno.test("isAvailable(): true once minigo#initialized fires, even if called before injection", async () => {
++  const win = makeWindow();
++  try {
++    const pending = new MiniGoModule().isAvailable();
++    win.stellar = { ...SENTINEL };
++    win.mini = provider();
++    win.dispatchEvent(new Event("minigo#initialized"));
++    assertEquals(await pending, true);
++  } finally {
++    clearWindow();
++  }
++});
++
++Deno.test("isAvailable(): false when MiniGo is never injected", async () => {
++  makeWindow();
++  try {
++    assertEquals(await new MiniGoModule().isAvailable(), false);
++  } finally {
++    clearWindow();
++  }
++});
++
++Deno.test("isPlatformWrapper(): true only inside the MiniGo app", async () => {
++  const win = makeWindow();
++  try {
++    win.stellar = { ...SENTINEL };
++    win.mini = provider();
++    assertEquals(await new MiniGoModule().isPlatformWrapper(), true);
++    win.stellar = { ...SENTINEL, platform: "extension" };
++    assertEquals(await new MiniGoModule().isPlatformWrapper(), false);
++  } finally {
++    clearWindow();
++  }
++});
++
++Deno.test("getAddress(): asks for access unless skipRequestAccess is set", async () => {
++  const win = makeWindow();
++  const calls: string[] = [];
++  try {
++    win.stellar = { ...SENTINEL };
++    win.mini = provider({
++      requestAccess: () => (calls.push("requestAccess"), Promise.resolve({ address: ADDRESS })),
++      getAddress: () => (calls.push("getAddress"), Promise.resolve({ address: ADDRESS })),
++    });
++    const mod = new MiniGoModule();
++    assertEquals(await mod.getAddress(), { address: ADDRESS });
++    assertEquals(await mod.getAddress({ skipRequestAccess: true }), { address: ADDRESS });
++    assertEquals(calls, ["requestAccess", "getAddress"]);
++  } finally {
++    clearWindow();
++  }
++});
++
++Deno.test("SEP-43 { error } results become rejections with the same code", async () => {
++  const win = makeWindow();
++  try {
++    win.stellar = { ...SENTINEL };
++    win.mini = provider({
++      signTransaction: () =>
++        Promise.resolve({ signedTxXdr: "", error: { code: -4, message: "The user rejected this request." } }),
++    });
++    const error = await assertRejects(() => new MiniGoModule().signTransaction("AAAA"));
++    assertEquals((error as { code: number }).code, -4);
++  } finally {
++    clearWindow();
++  }
++});
++
++Deno.test("signing results and options pass through unchanged", async () => {
++  const win = makeWindow();
++  let seenOpts: unknown;
++  try {
++    win.stellar = { ...SENTINEL };
++    win.mini = provider({
++      signMessage: (
++        _m: string,
++        opts: unknown,
++      ) => (seenOpts = opts, Promise.resolve({ signedMessage: "c2ln", signerAddress: ADDRESS })),
++    });
++    const mod = new MiniGoModule();
++    assertEquals(await mod.signTransaction("AAAA"), { signedTxXdr: "AAAA+sig", signerAddress: ADDRESS });
++    assertEquals(await mod.signAuthEntry("BBBB"), { signedAuthEntry: "c2ln", signerAddress: ADDRESS });
++    assertEquals(await mod.signMessage("hi", { networkPassphrase: "P", address: ADDRESS }), {
++      signedMessage: "c2ln",
++      signerAddress: ADDRESS,
++    });
++    assertEquals(seenOpts, { networkPassphrase: "P", address: ADDRESS });
++    assertEquals((await mod.getNetwork()).network, "TESTNET");
++  } finally {
++    clearWindow();
++  }
++});
++
++Deno.test("calls without an injected provider reject with code -1", async () => {
++  makeWindow();
++  try {
++    const error = await assertRejects(() => new MiniGoModule().getNetwork());
++    assertEquals((error as { code: number }).code, -1);
++  } finally {
++    clearWindow();
++  }
++});
+diff --git a/src/sdk/modules/minigo.module.ts b/src/sdk/modules/minigo.module.ts
+new file mode 100644
+index 0000000..6d604ac
+--- /dev/null
++++ b/src/sdk/modules/minigo.module.ts
+@@ -0,0 +1,175 @@
++import { type ModuleInterface, ModuleType } from "../../types/mod.ts";
++import { parseError } from "../utils.ts";
++
++/**
++ * Stellar Wallets Kit module for MiniGo.
++ *
++ * MiniGo injects a SEP-43 provider as `window.mini` — in its mobile app's in-app browser and in its browser
++ * extension — together with a frozen detection sentinel `window.stellar = { provider: "minigo", platform }`.
++ * The provider never throws: methods resolve with `{ ..., error? }`, so this module unwraps `error` into a
++ * rejection to match the kit's throw-on-failure contract.
++ *
++ * It talks to `window.mini` directly (not through `@stellar/freighter-api`) so it always targets MiniGo, even
++ * when Freighter is also installed, and has no dependencies.
++ */
++
++type ProviderError = { code: number; message: string; ext?: string[] };
++type Opts = { networkPassphrase?: string; address?: string };
++
++interface MiniGoProvider {
++  isMiniGo: true;
++  isConnected(): Promise<{ isConnected: boolean }>;
++  requestAccess(): Promise<{ address: string; error?: ProviderError }>;
++  getAddress(): Promise<{ address: string; error?: ProviderError }>;
++  signTransaction(
++    xdr: string,
++    opts?: Opts,
++  ): Promise<{ signedTxXdr: string; signerAddress?: string; error?: ProviderError }>;
++  signAuthEntry(
++    authEntry: string,
++    opts?: Opts,
++  ): Promise<{ signedAuthEntry: string; signerAddress?: string; error?: ProviderError }>;
++  signMessage(
++    message: string,
++    opts?: Opts,
++  ): Promise<{ signedMessage: string; signerAddress?: string; error?: ProviderError }>;
++  getNetwork(): Promise<{ network: string; networkPassphrase: string; error?: ProviderError }>;
++}
++
++type MiniGoWindow = Window & {
++  stellar?: { provider: string; platform: string; version: string };
++  mini?: MiniGoProvider;
++};
++
++const win = () => (typeof window === "undefined" ? undefined : (window as MiniGoWindow));
++
++export const MINIGO_ID: string = "minigo";
++
++/**
++ * How long isAvailable() waits for the provider to appear. The provider is injected before page scripts, so
++ * this only covers unusual load orders; it stays inside the kit's 1000ms isAvailable budget.
++ */
++const MINIGO_AVAILABILITY_WAIT_MS = 600;
++
++export class MiniGoModule implements ModuleInterface {
++  moduleType: ModuleType = ModuleType.HOT_WALLET;
++
++  productId: string = MINIGO_ID;
++  productName: string = "MiniGo";
++  productUrl: string = "https://minigo.app";
++  productIcon: string =
++    "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iOSIgZmlsbD0iIzBCMEIwRCIvPjxwYXRoIGQ9Ik05IDIyVjEwbDcgNyA3LTd2MTIiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSIzIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz48L3N2Zz4=";
++
++  private provider(): MiniGoProvider {
++    const provider = win()?.mini;
++    if (!provider?.isMiniGo) throw parseError({ code: -1, message: "MiniGo is not available" });
++    return provider;
++  }
++
++  private isReady(): boolean {
++    const w = win();
++    return w?.stellar?.provider === "minigo" && !!w.mini?.isMiniGo;
++  }
++
++  async isAvailable(): Promise<boolean> {
++    const w = win();
++    if (!w) return false;
++    if (this.isReady()) return true;
++    return new Promise<boolean>((resolve) => {
++      const done = (value: boolean) => {
++        clearTimeout(timer);
++        w.removeEventListener("minigo#initialized", onReady);
++        resolve(value);
++      };
++      const onReady = () => done(this.isReady());
++      const timer = setTimeout(() => done(this.isReady()), MINIGO_AVAILABILITY_WAIT_MS);
++      w.addEventListener("minigo#initialized", onReady, { once: true });
++    });
++  }
++
++  /** Inside MiniGo's own app browser, the kit can pick MiniGo without asking. */
++  isPlatformWrapper(): Promise<boolean> {
++    const w = win();
++    return Promise.resolve(w?.stellar?.provider === "minigo" && w.stellar.platform === "mobile");
++  }
++
++  async getAddress(params?: { path?: string; skipRequestAccess?: boolean }): Promise<{ address: string }> {
++    try {
++      const provider = this.provider();
++      const { address, error } = params?.skipRequestAccess
++        ? await provider.getAddress()
++        : await provider.requestAccess();
++      if (error) return Promise.reject(parseError(error));
++      if (!address) {
++        return Promise.reject({ code: -3, message: "MiniGo didn't return an address. Please connect first." });
++      }
++      return { address };
++    } catch (e) {
++      throw parseError(e);
++    }
++  }
++
++  async signTransaction(
++    xdr: string,
++    opts?: { networkPassphrase?: string; address?: string; path?: string },
++  ): Promise<{ signedTxXdr: string; signerAddress?: string }> {
++    try {
++      const { signedTxXdr, signerAddress, error } = await this.provider().signTransaction(xdr, {
++        networkPassphrase: opts?.networkPassphrase,
++        address: opts?.address,
++      });
++      if (error) return Promise.reject(parseError(error));
++      return { signedTxXdr, signerAddress };
++    } catch (e) {
++      throw parseError(e);
++    }
++  }
++
++  async signAuthEntry(
++    authEntry: string,
++    opts?: { networkPassphrase?: string; address?: string; path?: string },
++  ): Promise<{ signedAuthEntry: string; signerAddress?: string }> {
++    try {
++      const { signedAuthEntry, signerAddress, error } = await this.provider().signAuthEntry(authEntry, {
++        networkPassphrase: opts?.networkPassphrase,
++        address: opts?.address,
++      });
++      if (error) return Promise.reject(parseError(error));
++      if (!signedAuthEntry) {
++        return Promise.reject({ code: -3, message: "signedAuthEntry returned from MiniGo is undefined." });
++      }
++      return { signedAuthEntry, signerAddress };
++    } catch (e) {
++      throw parseError(e);
++    }
++  }
++
++  async signMessage(
++    message: string,
++    opts?: { networkPassphrase?: string; address?: string; path?: string },
++  ): Promise<{ signedMessage: string; signerAddress?: string }> {
++    try {
++      const { signedMessage, signerAddress, error } = await this.provider().signMessage(message, {
++        networkPassphrase: opts?.networkPassphrase,
++        address: opts?.address,
++      });
++      if (error) return Promise.reject(parseError(error));
++      if (!signedMessage) {
++        return Promise.reject({ code: -3, message: "signedMessage returned from MiniGo is undefined." });
++      }
++      return { signedMessage, signerAddress };
++    } catch (e) {
++      throw parseError(e);
++    }
++  }
++
++  async getNetwork(): Promise<{ network: string; networkPassphrase: string }> {
++    try {
++      const { network, networkPassphrase, error } = await this.provider().getNetwork();
++      if (error) return Promise.reject(parseError(error));
++      return { network, networkPassphrase };
++    } catch (e) {
++      throw parseError(e);
++    }
++  }
++}
+diff --git a/src/sdk/modules/utils.ts b/src/sdk/modules/utils.ts
+index 0bdd736..4c508bd 100644
+--- a/src/sdk/modules/utils.ts
++++ b/src/sdk/modules/utils.ts
+@@ -14,6 +14,7 @@ import { CactusLinkModule } from "./cactuslink.module.ts";
+ import { DcentModule } from "./dcent.module.ts";
+ import { ScopulyModule } from "./scopuly.module.ts";
+ import { GhostsigModule } from "./ghostsig.module.ts";
++import { MiniGoModule } from "./minigo.module.ts";
+ 
+ /**
+  * This method returns all modules that don't require extra configuration before they can be loaded
+@@ -41,6 +42,7 @@ export function defaultModules(opts?: {
+     new ScopulyModule(),
+     new MetaMaskModule(),
+     new GhostsigModule(),
++    new MiniGoModule(),
+   ];
+   return opts?.filterBy ? modules.filter(opts.filterBy) : modules;
+ }
+@@ -58,6 +60,7 @@ export function sep43Modules(opts?: { filterBy: (module: ModuleInterface) => boo
+     new DcentModule(),
+     new MetaMaskModule(),
+     new GhostsigModule(),
++    new MiniGoModule(),
+   ];
+   return opts?.filterBy ? modules.filter(opts.filterBy) : modules;
+ }
+-- 
+2.43.0
+

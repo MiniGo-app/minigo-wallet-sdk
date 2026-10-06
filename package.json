@@ -1,0 +1,42 @@
+{
+  "name": "minigo-wallet-sdk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MiniGo's Stellar wallet provider (SEP-43 window.mini + Freighter-compatible fallback), its Stellar Wallets Kit module, and a browser extension that uses them.",
+  "type": "module",
+  "exports": {
+    "./kit": {
+      "types": "./src/kit/minigo.module.ts",
+      "default": "./dist/kit/minigo.module.js"
+    },
+    "./inpage.embedded.js": "./dist/inpage.embedded.js"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test:unit": "node --experimental-strip-types --test test/unit/*.test.ts",
+    "test:e2e": "node test/e2e/run.mjs",
+    "test": "npm run build && npm run test:unit && npm run test:e2e",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@stellar/stellar-base": "^15.0.0"
+  },
+  "devDependencies": {
+    "@creit.tech/stellar-wallets-kit": "2.7.0",
+    "@stellar/freighter-api": "6.0.1",
+    "@types/chrome": "^0.1.0",
+    "@types/node": "^22.20.4",
+    "esbuild": "^0.25.0",
+    "playwright-core": "^1.55.0",
+    "typescript": "^5.9.0",
+    "vite": "^6.4.0"
+  },
+  "peerDependencies": {
+    "@creit.tech/stellar-wallets-kit": "^2.7.0"
+  },
+  "peerDependenciesMeta": {
+    "@creit.tech/stellar-wallets-kit": {
+      "optional": true
+    }
+  }
+}
