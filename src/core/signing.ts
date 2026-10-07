@@ -3,8 +3,7 @@ import { concat, equalBytes, fromBase64, toBase64, utf8 } from "./bytes.ts";
 import { transactionXdr } from "./encode.ts";
 import { invalidRequest, type WalletError } from "./errors.ts";
 
-// The three things a Stellar wallet signs for dApps (SEP-43), with the checks a wallet must make first.
-// Pure functions over a Keypair so the extension, the MiniGo app and tests share one implementation.
+// What a wallet signs for dApps under SEP-43, and the checks before it does.
 
 export type SignOptions = { networkPassphrase?: string; address?: string };
 type Result<T> = { ok: true; value: T } | { ok: false; error: WalletError };
@@ -14,7 +13,6 @@ const sha256 = (data: Uint8Array) => new Uint8Array(hash(data as never));
 
 const fail = <T,>(...ext: string[]): Result<T> => ({ ok: false, error: invalidRequest(...ext) });
 
-/** Refuses a request made for another network or signer. Hosts call it before asking the user, too. */
 export function checkSignOptions(address: string, networkPassphrase: string, opts?: SignOptions): WalletError | null {
   if (opts?.networkPassphrase && opts.networkPassphrase !== networkPassphrase) {
     return invalidRequest(`This wallet is on "${networkPassphrase}", not "${opts.networkPassphrase}".`);
@@ -28,7 +26,6 @@ export function checkSignOptions(address: string, networkPassphrase: string, opt
 const checkOptions = (keypair: Keypair, networkPassphrase: string, opts?: SignOptions) =>
   checkSignOptions(keypair.publicKey(), networkPassphrase, opts);
 
-/** Parses an authorization entry preimage for review, or explains why it can't be signed here. */
 export function parseAuthEntry(preimageXdr: string, networkPassphrase: string): Result<xdr.HashIdPreimage> {
   let preimage: xdr.HashIdPreimage;
   try {
@@ -45,7 +42,6 @@ export function parseAuthEntry(preimageXdr: string, networkPassphrase: string): 
   return { ok: true, value: preimage };
 }
 
-/** Parses a transaction (or fee bump) for review, or explains why it can't. */
 export function parseTransaction(txXdr: string, networkPassphrase: string): Result<Transaction | FeeBumpTransaction> {
   try {
     return { ok: true, value: TransactionBuilder.fromXDR(txXdr, networkPassphrase) };
@@ -54,7 +50,6 @@ export function parseTransaction(txXdr: string, networkPassphrase: string): Resu
   }
 }
 
-/** Signs a transaction envelope; returns the base64 envelope with our decorated signature added. */
 export function signTransactionXdr(
   keypair: Keypair,
   txXdr: string,
@@ -69,11 +64,7 @@ export function signTransactionXdr(
   return { ok: true, value: { signedTxXdr: transactionXdr(parsed.value), signerAddress: keypair.publicKey() } };
 }
 
-/**
- * Signs a Soroban authorization entry preimage (`HashIdPreimage` of type `envelopeTypeSorobanAuthorization`).
- * Returns the ed25519 signature of its SHA-256 hash, base64 — what the Stellar SDK's `signAuthEntries` and
- * Freighter return.
- */
+// Signs the SHA-256 of the preimage, like the Stellar SDK's signAuthEntries and Freighter.
 export function signAuthEntryXdr(
   keypair: Keypair,
   preimageXdr: string,
@@ -90,7 +81,7 @@ export function signAuthEntryXdr(
 
 const SEP53_PREFIX = "Stellar Signed Message:\n";
 
-/** SEP-53: ed25519 signature over SHA-256("Stellar Signed Message:\n" + message), base64. */
+// SEP-53 signs SHA-256("Stellar Signed Message:\n" + message).
 export function sep53Hash(message: string | Uint8Array) {
   const body = typeof message === "string" ? utf8(message) : message;
   return sha256(concat(utf8(SEP53_PREFIX), body));

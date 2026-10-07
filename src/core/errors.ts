@@ -1,4 +1,4 @@
-// SEP-43 error shapes. Messages are shown to users, so they say what to do next.
+// SEP-43 errors. Users see these messages.
 export type WalletError = { code: -1 | -2 | -3 | -4; message: string; ext?: string[] };
 
 export const internalError = (ext?: string[]): WalletError => ({
@@ -17,7 +17,6 @@ export const invalidRequest = (...ext: string[]): WalletError => ({
 
 export const userRejected = (): WalletError => ({ code: -4, message: "The user rejected this request." });
 
-/** A site already has as many requests waiting on the user as the wallet allows (see host.ts). */
 export const TOO_MANY_PENDING = "too_many_pending";
 export const tooManyPending = (): WalletError => ({
   code: -1,

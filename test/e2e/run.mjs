@@ -1,6 +1,5 @@
-// End-to-end: the built extension in Chromium, against Stellar Wallets Kit 2.x and @stellar/freighter-api,
-// plus a real testnet payment. Run `npm run build` first (npm test does).
-// Uses CHROMIUM_PATH if set, otherwise Playwright's Chromium (`npx playwright-core install chromium`).
+// The built extension in Chromium against Stellar Wallets Kit and @stellar/freighter-api, plus a testnet payment.
+// Run `npm run build` first. Set CHROMIUM_PATH to use your own Chromium.
 import { execSync } from "node:child_process";
 import { createReadStream, existsSync, mkdtempSync, statSync } from "node:fs";
 import { createServer } from "node:http";
@@ -19,7 +18,7 @@ let failures = 0;
 function check(label, actual, expected) {
   const ok = JSON.stringify(actual) === JSON.stringify(expected);
   if (!ok) failures++;
-  console.log(`${ok ? "  ✓" : "  ✗"} ${label}: ${JSON.stringify(actual)}${ok ? "" : `  (expected ${JSON.stringify(expected)})`}`);
+  console.log(`  ${ok ? "ok  " : "FAIL"} ${label}: ${JSON.stringify(actual)}${ok ? "" : `  (expected ${JSON.stringify(expected)})`}`);
 }
 
 function serve(dir, port) {
@@ -38,7 +37,7 @@ function serve(dir, port) {
 console.log("Building test page…");
 execSync("npx vite build -c test/e2e/page/vite.config.mjs", { cwd: root, stdio: "inherit" });
 const servers = [await serve(join(here, ".build/page"), 5701), await serve(join(here, "race"), 5702)];
-// A page the browser runs with an opaque ("null") origin, like every other sandboxed page and data: URL.
+// A sandboxed page, so its origin is "null".
 servers.push(
   await new Promise((resolve) => {
     const server = createServer((req, res) => {
@@ -61,12 +60,11 @@ servers.push(
 const ctx = await chromium.launchPersistentContext(mkdtempSync(join(tmpdir(), "minigo-ext-")), {
   executablePath: process.env.CHROMIUM_PATH || undefined,
   headless: true,
-  // Sandboxed CI/dev environments that only reach the internet through a proxy.
   ...(process.env.HTTPS_PROXY ? { proxy: { server: process.env.HTTPS_PROXY, bypass: "127.0.0.1,localhost" }, ignoreHTTPSErrors: true } : {}),
   args: [...(process.env.HTTPS_PROXY ? ["--ignore-certificate-errors"] : []), `--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`, "--headless=new"],
 });
 
-// Approval windows: approve unless a test queued "reject".
+// Approve each window unless a test queued "reject".
 const decisions = [];
 let approvals = 0;
 ctx.on("page", async (page) => {
@@ -80,11 +78,11 @@ ctx.on("page", async (page) => {
 try {
   const [worker] = ctx.serviceWorkers().length ? ctx.serviceWorkers() : [await ctx.waitForEvent("serviceworker")];
   const extId = new URL(worker.url()).host;
-  worker.on("console", (m) => m.type() === "error" && console.log("  · extension worker:", m.text()));
+  worker.on("console", (m) => m.type() === "error" && console.log("  extension worker:", m.text()));
   const extPage = await ctx.newPage();
   await extPage.goto(`chrome-extension://${extId}/popup.html`);
   const extMessage = (message) => extPage.evaluate((m) => chrome.runtime.sendMessage(m), message);
-  await extPage.waitForTimeout(500); // onInstalled registers the main-world provider
+  await extPage.waitForTimeout(500);
 
   const open = async (url) => {
     const page = await ctx.newPage();
@@ -160,11 +158,11 @@ try {
   const { address } = await extMessage({ kind: "wallet-state" });
   const funded = await fetch(`https://friendbot.stellar.org/?addr=${address}`).then((r) => r.ok).catch(() => false);
   if (!funded) {
-    console.log("  · friendbot unreachable — skipping the network test");
+    console.log("  Friendbot unreachable, skipping the network test");
   } else {
     const recipient = Keypair.random().publicKey();
     const paid = await page.evaluate((to) => window.payFlow(to), recipient);
-    if (!paid.hash) console.log("  · payment response:", JSON.stringify(paid));
+    if (!paid.hash) console.log("  payment response:", JSON.stringify(paid));
     check("payment returns a hash", /^[0-9a-f]{64}$/.test(paid.hash ?? ""), true);
     const onChain = await fetch(`https://horizon-testnet.stellar.org/transactions/${paid.hash}`).then((r) => r.json());
     check("Horizon: transaction successful", onChain.successful, true);

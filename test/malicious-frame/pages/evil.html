@@ -1,0 +1,56 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Malicious iframe</title>
+  </head>
+  <body>
+    <p>Malicious frame. It has no provider and no nonce; it tries every way it can think of to reach the wallet.</p>
+    <pre id="report">running…</pre>
+    <script>
+      const xdr = new URLSearchParams(location.search).get("xdr");
+      const attempts = [];
+      const note = (name, value) => attempts.push({ name, value });
+      const base = { source: "minigo-inpage", params: undefined };
+      let id = 9000;
+      const request = (method, params, extra) => JSON.stringify({ ...base, id: ++id, method, params, ...extra });
+
+      // 1. What the app can do: post straight to the native bridge, hoping to be taken for the app.
+      const bridge = window.ReactNativeWebView;
+      note("has ReactNativeWebView in this frame", !!bridge);
+      if (bridge) {
+        bridge.postMessage(request("getAddress", { prompt: false }));
+        bridge.postMessage(request("requestAccess"));
+        bridge.postMessage(request("signTransaction", { xdr }));
+        bridge.postMessage(request("signMessage", { message: "Sign in to Trusted Mini App" }));
+        bridge.postMessage(request("requestPayment", { to: "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN7", amount: "100", asset: "XLM" }));
+      }
+
+      // 2. Guess the nonce.
+      if (bridge) bridge.postMessage(request("signMessage", { message: "guessed nonce" }, { nonce: "0".repeat(48) }));
+
+      // 3. Reach into the app's frame for the nonce, the provider or the answers.
+      for (const [name, read] of [
+        ["parent.__minigoNonce", () => parent.__minigoNonce],
+        ["top.__minigoNonce", () => top.__minigoNonce],
+        ["parent.mini", () => parent.mini],
+        ["parent.document", () => parent.document.title],
+        ["top.ReactNativeWebView", () => top.ReactNativeWebView],
+      ]) {
+        try {
+          note(name, String(read()));
+        } catch (error) {
+          note(name, "blocked: " + error.name);
+        }
+      }
+
+      // 4. Web preview path: ask the hosting window directly (there the answer to "who sent this" is exact).
+      for (const target of [parent, top]) target.postMessage(request("signMessage", { message: "via postMessage" }), "*");
+
+      window.__attempts = attempts;
+      document.getElementById("report").textContent = attempts.map((a) => a.name + ": " + a.value).join("\n") +
+        "\n\nIf MiniGo showed an approval sheet for the app while this page was open, the bridge is broken.";
+      window.__evilDone = true;
+    </script>
+  </body>
+</html>

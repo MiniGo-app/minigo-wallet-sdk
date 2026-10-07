@@ -2,16 +2,8 @@ import { ModuleType, parseError, type ModuleInterface } from "@creit.tech/stella
 import { MINIGO_ICON } from "./icon.ts";
 
 /**
- * Stellar Wallets Kit module for MiniGo.
- *
- * MiniGo injects a SEP-43 provider as `window.mini` in its in-app browser and extension,
- * together with a frozen `window.stellar` detection sentinel.
- * The provider never throws: methods resolve with `{ ..., error? }`, so this module unwraps `error` into a
- * rejection to match the kit's throw-on-failure contract.
- *
- * It uses `window.mini` directly so another installed wallet cannot intercept requests.
- *
- * This file mirrors `upstream/minigo.module.ts`, the version proposed for the kit itself; only the imports differ.
+ * Stellar Wallets Kit module for MiniGo. It talks to `window.mini` (SEP-43) directly, so it targets MiniGo even when
+ * Freighter is installed. The provider resolves with `{ error }` instead of throwing, so errors are unwrapped here.
  */
 
 type ProviderError = { code: number; message: string; ext?: string[] };
@@ -37,10 +29,7 @@ const win = () => (typeof window === "undefined" ? undefined : (window as MiniGo
 
 export const MINIGO_ID: string = "minigo";
 
-/**
- * How long isAvailable() waits for the provider to appear. The provider is injected before page scripts, so
- * this only covers unusual load orders; it stays inside the kit's 1000ms isAvailable budget.
- */
+// The provider is injected before page scripts, so this only covers odd load orders. The kit allows 1000 ms.
 const MINIGO_AVAILABILITY_WAIT_MS = 600;
 
 export class MiniGoModule implements ModuleInterface {
@@ -78,7 +67,6 @@ export class MiniGoModule implements ModuleInterface {
     });
   }
 
-  /** Inside MiniGo's own app browser, the kit can pick MiniGo without asking. */
   isPlatformWrapper(): Promise<boolean> {
     const w = win();
     return Promise.resolve(w?.stellar?.provider === "minigo" && w.stellar.platform === "mobile");

@@ -56,8 +56,7 @@ function render(request: ApprovalRequest | null) {
 }
 
 const decide = (ok: boolean) => chrome.runtime.sendMessage({ kind: "approval-decision", id, ok }).then(() => window.close());
-// The window opens wherever the user's pointer happens to be, and a page can time a request to land under a click
-// that was meant for something else. Approve only arms once the request has been on screen for a moment.
+// A page could time a request so the window opens under a click meant for something else.
 const ARM_DELAY_MS = 700;
 const okButton = $("ok") as HTMLButtonElement;
 okButton.disabled = true;

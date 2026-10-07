@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Trusted Mini App</title>
+    __PROVIDER_TAG__
+  </head>
+  <body>
+    <h1>Trusted Mini App</h1>
+    <p>An approved app. It embeds a third-party frame (an "ad") from another origin.</p>
+    <pre id="out">starting</pre>
+    <!-- The frame's URL carries a transaction the wallet would accept, so the only thing missing is the right to ask. -->
+    <iframe id="ad" title="ad" width="300" height="120" src="__EVIL_ORIGIN__/evil.html?xdr=__XDR__"></iframe>
+    <script>
+      // The app's own, legitimate use of the wallet: the main frame, through the provider MiniGo injected.
+      (async () => {
+        const out = document.getElementById("out");
+        try {
+          const network = await window.mini.getNetwork();
+          const { address } = await window.mini.getAddress({ prompt: false });
+          out.textContent = JSON.stringify({ network: network.networkPassphrase, address });
+        } catch (error) {
+          out.textContent = "error: " + (error && error.message);
+        }
+        window.__appDone = true;
+      })();
+    </script>
+  </body>
+</html>

@@ -1,4 +1,4 @@
-// A dApp page for the e2e tests: Stellar Wallets Kit 2.x, @stellar/freighter-api, and the MiniGo module.
+// The e2e dApp page: Stellar Wallets Kit, @stellar/freighter-api and the MiniGo module.
 import { Networks, StellarWalletsKit } from "@creit.tech/stellar-wallets-kit";
 import { defaultModules } from "@creit.tech/stellar-wallets-kit/modules/utils";
 import * as freighter from "@stellar/freighter-api";

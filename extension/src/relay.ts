@@ -1,8 +1,6 @@
 import { HOST_SOURCE, INPAGE_SOURCE, documentOrigin, selfOrigin } from "../../src/protocol.ts";
 
-// Isolated-world content script: carries requests from the page's `window.mini` to the background worker and
-// the answers back. It adds nothing of its own; the background uses the sender's real origin, not anything the
-// page claims.
+// Carries messages between the page and the background worker. The background takes the origin from Chrome.
 
 window.addEventListener("message", (event: MessageEvent) => {
   if (event.source !== window || event.origin !== documentOrigin()) return;

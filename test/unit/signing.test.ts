@@ -48,7 +48,7 @@ test("signTransaction adds a valid signature from our key", () => {
   assert.ok(kp.verify(tx.hash(), tx.signatures[0].signature()));
 });
 
-test("signTransaction refuses another network, another signer, and bad XDR with code -3", () => {
+test("signTransaction refuses another network, another signer or bad XDR with code -3", () => {
   const kp = Keypair.random();
   const wrongNet = signTransactionXdr(kp, paymentXdr(kp.publicKey()), TESTNET, { networkPassphrase: Networks.PUBLIC });
   const wrongSigner = signTransactionXdr(kp, paymentXdr(kp.publicKey()), TESTNET, { address: Keypair.random().publicKey() });

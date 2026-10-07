@@ -3,8 +3,7 @@ import { externalError, invalidRequest, type WalletError } from "./errors.ts";
 import { transactionHashHex, transactionXdr } from "./encode.ts";
 import type { NetworkConfig } from "./network.ts";
 
-// Just enough Horizon for a wallet: accounts, payments, submission. Plain fetch, no SDK server class, so it
-// runs in extension workers and React Native unchanged.
+// Plain fetch instead of the SDK's server class, so this runs in extension workers and React Native as is.
 
 export type Balance = { asset: Asset; balance: string; limit?: string };
 export type AccountState =
@@ -16,38 +15,32 @@ export type AccountState =
       subentries: number;
       sponsoring: number;
       sponsored: number;
-      /** XLM each account entry must keep in reserve. Set by network vote, so read from the ledger. */
       baseReserve: number;
-      /** Ledger that last changed this account (any balance, incoming or outgoing). Unchanged means nothing new. */
+      // Unchanged means nothing happened on the account.
       lastModifiedLedger: number;
     };
 
-/** Stellar's base reserve when the ledger can't be read. Only a fallback: validators can change it. */
+// Used when the ledger can't be read. Validators can change the real value.
 export const FALLBACK_BASE_RESERVE = 0.5;
 
 const OFFLINE = "Couldn't reach Stellar. Check your connection and try again.";
 
 const RETRY_DELAYS = [400, 1200];
 
-// A transaction carries an expiry. Measured against the phone's clock, a clock that is a few minutes off would
-// make Stellar reject every payment as expired, so use the network's time, learned from Horizon's replies.
+// A phone clock a few minutes off would make every payment expire, so time bounds use Horizon's clock.
 let serverOffsetMs = 0;
 
-/** Now, in whole seconds, on the network's clock (the phone's clock until Horizon has answered once). */
 export function networkNowSeconds() {
   return Math.floor((Date.now() + serverOffsetMs) / 1000);
 }
 
-/** A transaction valid for `seconds` from now on the network's clock. */
 function validFor<T extends { setTimebounds(min: number, max: number): T }>(builder: T, seconds = 180): T {
   return builder.setTimebounds(0, networkNowSeconds() + seconds);
 }
 
 async function horizon(network: NetworkConfig, path: string, init?: RequestInit) {
   const url = `${network.networkUrl}${path}`;
-  // Retried through brief network drops (common on phones). Resending a signed transaction is safe: it has
-  // one hash and one sequence number, so it can land at most once, and Horizon answers a repeat with the
-  // original result.
+  // Retrying a signed transaction is safe, it can only land once.
   const delays = RETRY_DELAYS;
   let response: Response | undefined;
   for (let attempt = 0; !response; attempt++) {
@@ -66,7 +59,6 @@ async function horizon(network: NetworkConfig, path: string, init?: RequestInit)
 const RESERVE_TTL = 10 * 60 * 1000;
 const reserves = new Map<string, { value: number; at: number }>();
 
-/** The network's current base reserve, in XLM, from the latest ledger (cached briefly). */
 export async function loadBaseReserve(network: NetworkConfig): Promise<number> {
   const cached = reserves.get(network.networkPassphrase);
   if (cached && Date.now() - cached.at < RESERVE_TTL) return cached.value;
@@ -79,7 +71,7 @@ export async function loadBaseReserve(network: NetworkConfig): Promise<number> {
       return value;
     }
   } catch {
-    // Fall through: a failed lookup shouldn't block the wallet.
+    // Use the fallback.
   }
   return cached?.value ?? FALLBACK_BASE_RESERVE;
 }
@@ -108,7 +100,7 @@ export async function loadAccount(network: NetworkConfig, address: string): Prom
   };
 }
 
-/** XLM the account can spend: balance minus the reserve (one base reserve per entry, 2 for the account) and a fee buffer. */
+// Balance minus the reserve (one base reserve per entry and 2 for the account) and a little for fees.
 export function spendableXlm(state: Extract<AccountState, { exists: true }>) {
   const native = state.balances.find((b) => b.asset.isNative());
   const reserve = state.baseReserve * (2 + state.subentries + state.sponsoring - state.sponsored);
@@ -154,7 +146,7 @@ export async function submitTransaction(network: NetworkConfig, tx: Transaction)
   return { hash: body.hash as string, ledger: body.ledger as number };
 }
 
-// Horizon timed out waiting for the ledger; the transaction may still land, so look it up for a while.
+// After a Horizon timeout the transaction may still land.
 async function awaitTransaction(network: NetworkConfig, hash: string) {
   for (let i = 0; i < 10; i++) {
     await new Promise((resolve) => setTimeout(resolve, 3000));
@@ -172,10 +164,7 @@ export type PaymentPlan = {
   createsAccount: boolean;
 };
 
-/**
- * Builds a payment from `source`. Sending XLM to an account that doesn't exist creates it (Stellar's
- * createAccount, minimum two base reserves); other assets need the recipient to exist and trust the asset.
- */
+// XLM to an account that doesn't exist creates it. Other assets need an existing account with a trustline.
 export async function buildPayment(
   network: NetworkConfig,
   params: { source: string; to: string; asset: Asset; amount: string; memo?: string },
@@ -188,7 +177,6 @@ export async function buildPayment(
   let createsAccount = false;
   if (!destination.exists) {
     if (!params.asset.isNative()) throw invalidRequest("The recipient's account doesn't exist yet, so it can only receive XLM.");
-    // A new account must hold two base reserves (1 XLM at today's 0.5 XLM reserve).
     const minimum = 2 * source.baseReserve;
     if (Number(params.amount) < minimum) throw invalidRequest(`A new Stellar account needs at least ${minimum} XLM.`);
     operation = Operation.createAccount({ destination: params.to, startingBalance: params.amount });

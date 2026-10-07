@@ -1,15 +1,13 @@
 import { createCaller, createProvider, installProvider } from "./provider.ts";
 import { installFreighterCompat } from "./freighter.ts";
 
-// Entry for pages running inside MiniGo: injected into the React Native WebView before any page script
-// (`injectedJavaScriptBeforeContentLoaded`), or included by a page that MiniGo's web preview shows in an
-// iframe. No real Freighter exists there, so the Freighter fallback is always on.
+// Injected into mini apps in the MiniGo app, or included by pages shown in the web preview. There is no real
+// Freighter there, so the Freighter fallback is always on.
 
 type RNWebView = { postMessage(data: string): void };
 const w = window as unknown as { ReactNativeWebView?: RNWebView; mini?: { isMiniGo?: boolean }; __minigoNonce?: string };
 
-// MiniGo hands the top document a secret nonce and only accepts requests that carry it (src/bridge-gate.ts), so
-// an iframe inside the app can't speak for it. Take it into this closure and remove it from the page.
+// Keep the nonce in this closure and take it off the page (see bridge-gate.ts).
 const nonce = w.__minigoNonce;
 try {
   delete w.__minigoNonce;
@@ -26,7 +24,7 @@ if (!w.mini?.isMiniGo) {
         if (native) native.postMessage(JSON.stringify({ ...request, nonce }));
         else window.parent.postMessage(JSON.stringify(request), "*");
       },
-      // Native answers arrive through window.__minigoHostResponse; web answers come from the parent frame.
+      // Native answers come through window.__minigoHostResponse.
       (source) => inFrame && source === window.parent,
     );
     installProvider(createProvider(call), native ? "mobile" : "web");

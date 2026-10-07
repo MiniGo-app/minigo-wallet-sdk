@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Test Mini App</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%236D28D9'/%3E%3Cpath d='M9 22V10l7 7 7-7v12' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="style.css" />
+    <script src="minigo.js"></script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="brand">
+          <span class="logo" aria-hidden="true">M</span>
+          <div>
+            <h1>Test Mini App</h1>
+            <p class="muted">Exercises MiniGo's <code>window.mini</code> wallet (SEP-43, testnet)</p>
+          </div>
+        </div>
+        <span id="env" class="badge">Checking</span>
+      </header>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>1. Wallet</h2>
+          <span id="wallet-state" class="pill">Not connected</span>
+        </div>
+        <p class="muted">Asks MiniGo to connect. You'll see its approval sheet.</p>
+        <div class="row">
+          <button id="connect" class="primary">Connect wallet</button>
+          <button id="address">Get address</button>
+        </div>
+        <output id="address-out" class="mono"></output>
+        <div class="row">
+          <button id="network">Get network</button>
+        </div>
+        <output id="network-out" class="mono"></output>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>2. Payment</h2>
+        </div>
+        <p class="muted">Asks MiniGo for a real testnet payment. You review it and approve with your PIN; MiniGo signs and submits it, then returns the hash.</p>
+        <form id="pay-form">
+          <label>To (Stellar address)
+            <input id="to" class="mono" autocomplete="off" spellcheck="false" value="GBAW5XGWORWVFE2XTJYDTLDHXTY2Q2MO73HYCGB3XMFMQ562Q2W2GJQX" />
+          </label>
+          <div class="split">
+            <label>Amount
+              <input id="amount" inputmode="decimal" value="1" />
+            </label>
+            <label>Asset
+              <select id="asset">
+                <option>XLM</option>
+                <option>USDC</option>
+              </select>
+            </label>
+          </div>
+          <label>Memo (optional, 28 max)
+            <input id="memo" maxlength="28" value="Test order #1" />
+          </label>
+          <button class="primary" type="submit">Request payment</button>
+        </form>
+        <output id="pay-out" class="mono"></output>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>3. Sign a message</h2>
+        </div>
+        <p class="muted">SEP-53 message signing. Nothing is sent to the network.</p>
+        <form id="sign-form">
+          <label>Message
+            <input id="message" autocomplete="off" value="Sign in to Test Mini App" />
+          </label>
+          <button class="primary" type="submit">Sign message</button>
+        </form>
+        <output id="sign-out" class="mono"></output>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>4. Edge cases</h2>
+        </div>
+        <p class="muted">These should come back with an <code>error</code> (code -3), never hang.</p>
+        <div class="row wrap">
+          <button data-case="bad-address">Bad address</button>
+          <button data-case="zero">Zero amount</button>
+          <button data-case="bad-asset">Unknown asset</button>
+          <button data-case="wrong-network">Wrong network</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Log</h2>
+          <button id="clear" class="link">Clear</button>
+        </div>
+        <ol id="log" class="log" aria-live="polite"></ol>
+      </section>
+    </main>
+    <script src="app.js"></script>
+  </body>
+</html>

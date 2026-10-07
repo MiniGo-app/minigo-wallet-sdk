@@ -12,8 +12,7 @@ import {
   type Sentinel,
 } from "../protocol.ts";
 
-// `window.mini`: MiniGo's SEP-43 provider. Every method resolves — never throws — with either its result or
-// `{ error }`, exactly as SEP-43 specifies. The page never sees keys; each call is a message to the host.
+// window.mini, the SEP-43 provider. Methods never throw: they resolve with the result or with `{ error }`.
 
 export type Transport = (request: InpageRequest) => void;
 
@@ -96,7 +95,7 @@ export function createProvider(call: Call): MiniProvider {
     isConnected: async () => ({ isConnected: true }),
     isAllowed: () => run("isAllowed", undefined, { isAllowed: false }, (r) => ({ isAllowed: r.isAllowed })),
     requestAccess: () => run("requestAccess", undefined, { address: "" }, (r) => ({ address: r.address })),
-    // SEP-43: getAddress does whatever it takes to return an address, including asking the user.
+    // SEP-43 lets getAddress ask the user.
     getAddress: () => run("getAddress", { prompt: true }, { address: "" }, (r) => ({ address: r.address })),
     getNetwork: () =>
       run("getNetwork", undefined, { network: "", networkPassphrase: "" }, (r) => ({ network: r.network, networkPassphrase: r.networkPassphrase })),
@@ -110,7 +109,6 @@ export function createProvider(call: Call): MiniProvider {
   });
 }
 
-/** Installs `window.mini`, the `window.stellar` sentinel, and announces itself with `minigo#initialized`. */
 export function installProvider(provider: MiniProvider, platform: Sentinel["platform"]) {
   const w = window as unknown as { mini?: MiniProvider; stellar?: Sentinel };
   if (w.mini?.isMiniGo) return w.mini;

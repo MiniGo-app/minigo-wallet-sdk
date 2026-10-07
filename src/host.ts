@@ -15,9 +15,8 @@ import {
 } from "./core/signing.ts";
 import { HOST_SOURCE, INPAGE_SOURCE, METHODS, type HostResponse, type Method } from "./protocol.ts";
 
-// The wallet side of the protocol, shared by the browser extension and the MiniGo app. It validates every
-// request from the (untrusted) page, enforces per-site permission, asks the user through `approve`, and only
-// then touches the key. Hosts supply storage, keys and UI through HostContext.
+// The wallet side of the protocol, shared by the extension and the app. The page is never trusted: every
+// request is validated and approved by the user before the key is touched.
 
 export type ApprovalRequest =
   | { kind: "connect"; origin: string; address: string }
@@ -36,35 +35,27 @@ export type ApprovalRequest =
 
 export type HostContext = {
   network: NetworkConfig;
-  /** The wallet's address, or null when no wallet has been set up yet. */
   address(): Promise<string | null>;
-  /** The signing key. Called only after the user approved. */
+  // Only called after the user approved.
   keypair(): Promise<Keypair>;
   isAllowed(origin: string): Promise<boolean>;
   allow(origin: string): Promise<void>;
-  /** Shows the request to the user; resolves true to go ahead. */
   approve(request: ApprovalRequest): Promise<boolean>;
-  /** Called after a payment the page asked for lands on the network. */
   onPayment?(details: { origin: string; hash: string; to: string; amount: string; assetCode: string; memo?: string }): void;
 };
 
 type Parsed = { id: number; method: Method; params: Record<string, unknown> | undefined };
 
-// Limits on what a page can ask for. Real requests are far smaller; these keep a hostile page from freezing the
-// wallet with a huge payload or burying the user under prompts.
-/** Whole request as received, in characters. */
+// Real requests are far smaller. These stop a hostile page from freezing the wallet or flooding the user.
 export const MAX_REQUEST_LENGTH = 512 * 1024;
-/** A transaction or authorization entry, base64. Stellar's largest transactions are about 130 KB. */
+// Stellar's largest transactions are about 130 KB of base64.
 export const MAX_XDR_LENGTH = 256 * 1024;
-/** A message to sign, in UTF-8 bytes. */
 export const MAX_MESSAGE_BYTES = 64 * 1024;
-/** Prompts one site may have waiting on the user at once. Past this, its new requests are refused. */
 export const MAX_PENDING_APPROVALS = 3;
 
-// One wallet host per JavaScript runtime (the extension's worker, or the app), so this is keyed by origin alone.
+// There is one host per runtime, so the origin is enough of a key.
 const pendingApprovals = new Map<string, number>();
 
-/** `ctx.approve`, refusing a site that already has MAX_PENDING_APPROVALS prompts waiting. */
 async function approve(ctx: HostContext, request: ApprovalRequest): Promise<boolean> {
   const waiting = pendingApprovals.get(request.origin) ?? 0;
   if (waiting >= MAX_PENDING_APPROVALS) throw tooManyPending();
@@ -85,7 +76,6 @@ const xdrParam = (value: unknown, what: string) => {
   return text;
 };
 
-/** Accepts only well-formed requests from the provider; returns null for anything else (ignored). */
 export function parseRequest(raw: unknown): Parsed | null {
   let data = raw;
   if (typeof data === "string" && data.length > MAX_REQUEST_LENGTH) return null;
@@ -115,7 +105,7 @@ function signOptions(value: unknown): SignOptions | undefined {
   return { networkPassphrase: str(networkPassphrase), address: str(address) };
 }
 
-// Wrong network or signer: refused before the user is asked, since they couldn't approve it anyway.
+// Refused before the user is asked, since they couldn't approve it anyway.
 function refuseOptions(address: string, networkPassphrase: string, opts?: SignOptions) {
   const bad = checkSignOptions(address, networkPassphrase, opts);
   if (bad) throw bad;
@@ -148,7 +138,7 @@ async function run(ctx: HostContext, origin: string, method: Method, params: Rec
         const address = await ctx.address();
         return { address: address && (await ctx.isAllowed(origin)) ? address : "" };
       }
-    // falls through: getAddress with a prompt is requestAccess
+    // falls through
     case "requestAccess": {
       const allowed = await ensureAllowed(ctx, origin);
       if (isWalletError(allowed)) throw allowed;
@@ -200,7 +190,7 @@ async function run(ctx: HostContext, origin: string, method: Method, params: Rec
       const amount = typeof params?.amount === "number" ? String(params.amount) : str(params?.amount);
       const memo = str(params?.memo);
       const asset = parseAsset(str(params?.asset), network.network);
-      if (!to || !/^G[A-Z2-7]{55}$/.test(to)) throw invalidRequest("`to` must be a Stellar address (G…)");
+      if (!to || !/^G[A-Z2-7]{55}$/.test(to)) throw invalidRequest("`to` must be a Stellar address");
       if (!amount || !/^\d+(\.\d{1,7})?$/.test(amount) || !(Number(amount) > 0)) throw invalidRequest("`amount` must be a positive number with up to 7 decimals");
       if (!asset) throw invalidRequest('`asset` must be "XLM", "USDC" or "CODE:ISSUER"');
       if (memo !== undefined && new TextEncoder().encode(memo).length > 28) throw invalidRequest("`memo` can be at most 28 bytes");
@@ -210,8 +200,7 @@ async function run(ctx: HostContext, origin: string, method: Method, params: Rec
       const assetCode = asset.isNative() ? "XLM" : asset.getCode();
       const approved = await approve(ctx, { kind: "payment", origin, to, amount, assetCode, memo, createsAccount: plan.createsAccount });
       if (!approved) throw userRejected();
-      // The user may have taken a while: build again so the transaction's sequence number and time window
-      // are fresh, and make sure it is still the payment they approved.
+      // Rebuild so the sequence number and time bounds are fresh after the user took their time.
       const fresh = await buildPayment(network, { source: allowed.address, to, asset, amount, memo });
       if (fresh.createsAccount !== plan.createsAccount) throw externalError("The recipient's account changed while you were deciding. Try again.");
       fresh.tx.sign(await ctx.keypair());
@@ -222,7 +211,7 @@ async function run(ctx: HostContext, origin: string, method: Method, params: Rec
   }
 }
 
-/** Handles one raw message from the page. Returns the response to send back, or null to ignore it. */
+// Returns null for anything that isn't a request, which the caller ignores.
 export async function handleRequest(ctx: HostContext, origin: string, raw: unknown): Promise<HostResponse | null> {
   const request = parseRequest(raw);
   if (!request) return null;

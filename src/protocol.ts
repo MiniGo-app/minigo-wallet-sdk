@@ -1,35 +1,27 @@
 import type { WalletError } from "./core/errors.ts";
 import type { SignOptions } from "./core/signing.ts";
 
-// Messages between the in-page provider (untrusted page context) and the wallet host (the extension's
-// background worker, or the MiniGo app). The host decides everything; the page only asks.
+// Messages between the in-page provider and the wallet host. The page only asks; the host decides.
 
 export const INPAGE_SOURCE = "minigo-inpage";
 export const HOST_SOURCE = "minigo-host";
 export const PROVIDER_VERSION = "0.1.0";
 
-/**
- * The document's real origin. Not `location.origin`: a page served with a CSP sandbox keeps its URL's origin in
- * `location` but runs with the opaque origin "null", and only `self.origin` says so.
- */
+// Not location.origin: a page sandboxed by CSP keeps its URL's origin there but really runs as "null".
 export const documentOrigin = () => (globalThis as { origin?: string }).origin ?? window.location.origin;
 
-/**
- * Target origin for a message a page posts to itself. An opaque origin ("null") can't be named as a target, so
- * those pages use "*": the target is this same window either way.
- */
+// "null" can't be a postMessage target, and the message goes to this same window anyway.
 export const selfOrigin = () => {
   const origin = documentOrigin();
   return origin === "null" ? "*" : origin;
 };
 
-/** The detection sentinel other code can check without calling the wallet. */
 export type Sentinel = { provider: "minigo"; platform: "extension" | "mobile" | "web"; version: string };
 
 export type PaymentParams = {
   to: string;
   amount: string;
-  /** "XLM" (default), "USDC", or "CODE:ISSUER" for any other Stellar asset. */
+  // "XLM" (the default), "USDC" or "CODE:ISSUER".
   asset?: string;
   memo?: string;
 };
@@ -37,7 +29,7 @@ export type PaymentParams = {
 export type RequestMap = {
   isAllowed: { params: undefined; result: { isAllowed: boolean } };
   requestAccess: { params: undefined; result: { address: string } };
-  /** Without a prompt: the address if this site is already allowed, otherwise "". */
+  // With prompt false, "" unless the site is already allowed.
   getAddress: { params: { prompt: boolean }; result: { address: string } };
   getNetwork: {
     params: undefined;
@@ -56,7 +48,7 @@ export type InpageRequest<M extends Method = Method> = {
   id: number;
   method: M;
   params: RequestMap[M]["params"];
-  /** Inside the MiniGo app only: proves the request came from the main frame (see bridge-gate.ts). */
+  // Only inside the MiniGo app, see bridge-gate.ts.
   nonce?: string;
 };
 

@@ -51,17 +51,13 @@ export type TransactionSummary = {
   memo?: string;
   operations: string[];
   risky: boolean;
-  /** The transaction's own source account is the wallet's. */
   sourceIsYou: boolean;
-  /** Some operation names the wallet's account as its source, so signing lets it act for that account. */
+  // Some operation is drawn on the wallet's account.
   usesYourAccount: boolean;
 };
 
-/**
- * Lines for an approval screen. Operations that act for a different account than the transaction's source
- * say so ("from your account" or the other address), so a transaction built by someone else can't pass off
- * an operation drawn on the wallet as the builder's own.
- */
+// Operations with their own source account say so, so a transaction built by someone else can't pass off an
+// operation drawn on the wallet as the builder's own.
 export function describeTransaction(tx: Transaction | FeeBumpTransaction, wallet?: string): TransactionSummary {
   const inner = tx instanceof FeeBumpTransaction ? tx.innerTransaction : tx;
   const operations = inner.operations.map((op) => {
@@ -75,7 +71,7 @@ export function describeTransaction(tx: Transaction | FeeBumpTransaction, wallet
     fee: (Number(tx.fee) / 1e7).toFixed(7).replace(/\.?0+$/, ""),
     memo,
     operations,
-    // Operations that can hand over control of the account deserve a warning.
+    // These can hand over control of the account.
     risky: inner.operations.some((op) => op.type === "setOptions" || op.type === "accountMerge"),
     sourceIsYou: inner.source === wallet,
     usesYourAccount: inner.source === wallet || inner.operations.some((op) => op.source === wallet),
@@ -83,12 +79,9 @@ export function describeTransaction(tx: Transaction | FeeBumpTransaction, wallet
 }
 
 export type AuthEntryDetails = {
-  /** Contract being called, when the entry authorizes a contract function call. */
   contract?: string;
   functionName?: string;
-  /** The call's arguments, as readable text. */
   args: string[];
-  /** Further calls the entry also authorizes (nested calls made by the contract). */
   nestedCalls: number;
   expiresAtLedger?: number;
 };
@@ -109,7 +102,6 @@ const argText = (value: xdr.ScVal) => {
 const countNested = (call: xdr.SorobanAuthorizedInvocation): number =>
   call.subInvocations().reduce((sum, sub) => sum + 1 + countNested(sub), 0);
 
-/** What a Soroban authorization entry would let a contract do, for an approval screen. */
 export function describeAuthEntry(preimage: xdr.HashIdPreimage): AuthEntryDetails {
   const auth = preimage.sorobanAuthorization();
   const root = auth.invocation();

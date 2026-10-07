@@ -1,0 +1,12 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>MiniGo web preview (host)</title>
+  </head>
+  <body>
+    <!-- Stands in for MiniGo's web preview: it runs the mini app in an iframe and listens like MiniAppFrame.web.tsx. -->
+    <iframe id="app" title="app" width="600" height="400" src="__APP_ORIGIN__/app-web.html?xdr=__XDR__"></iframe>
+    <script src="/web-host.js"></script>
+  </body>
+</html>

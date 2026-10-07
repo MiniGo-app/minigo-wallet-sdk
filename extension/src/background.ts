@@ -4,8 +4,7 @@ import { invalidRequest } from "../../src/core/errors.ts";
 import { handleRequest, type ApprovalRequest, type HostContext } from "../../src/host.ts";
 import { HOST_SOURCE } from "../../src/protocol.ts";
 
-// Background worker: owns the key, the list of allowed sites and the approval queue. Testnet only — the key is
-// generated on first run and kept in chrome.storage.local, which is fine for a test wallet and not for real funds.
+// Testnet only. The key lives in chrome.storage.local, which is fine for a test wallet and not for real funds.
 
 type Stored = { secret?: string; allowed?: string[]; freighterCompat?: boolean };
 const store = {
@@ -13,8 +12,7 @@ const store = {
   set: (value: Stored) => chrome.storage.local.set(value),
 };
 
-// Made once and shared: on first run, onInstalled and a page's first request can both ask for the key before
-// either has stored it, and two separate checks would each create (and store) a different one.
+// Shared so that onInstalled and a first request racing on first run don't each create a key.
 let loadingKey: Promise<Keypair> | null = null;
 function keypair() {
   loadingKey ??= (async () => {
@@ -31,14 +29,12 @@ function keypair() {
   return loadingKey;
 }
 
-// Only real web origins get a permission of their own. Sandboxed pages and data: URLs all report "null", and
-// file: pages all share "file://", so allowing one would allow every other page like it.
+// Sandboxed and data: pages all report "null" and file: pages share "file://", so they can't be told apart.
 const webOrigin = (sender: chrome.runtime.MessageSender) => {
   const origin = sender.origin ?? (sender.url ? new URL(sender.url).origin : "");
   return /^https?:\/\/[^/]+$/.test(origin) ? origin : null;
 };
 
-// ---- main-world provider registration (with or without the Freighter fallback)
 const SCRIPT_ID = "minigo-inpage";
 async function registerProvider() {
   const compat = (await store.get("freighterCompat")) === true;
@@ -60,7 +56,7 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 chrome.runtime.onStartup.addListener(registerProvider);
 
-// ---- approvals: one window per request, answered from approve.html
+// One approval window per request.
 type Pending = { request: ApprovalRequest; resolve: (ok: boolean) => void; windowId?: number };
 const pending = new Map<string, Pending>();
 
@@ -102,7 +98,7 @@ const context: HostContext = {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const fromExtensionPage = sender.id === chrome.runtime.id && !!sender.url?.startsWith(chrome.runtime.getURL(""));
 
-  // Requests from pages, relayed by relay.js. The origin comes from Chrome, never from the page.
+  // The origin comes from Chrome, never from the page.
   if (message?.kind === "inpage-request" && !fromExtensionPage) {
     const origin = webOrigin(sender);
     if (!sender.tab) return false;
@@ -115,7 +111,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  // Extension pages only (popup, approval window) from here on.
+  // Extension pages only from here on.
   if (!fromExtensionPage) return false;
   switch (message?.kind) {
     case "approval-details":

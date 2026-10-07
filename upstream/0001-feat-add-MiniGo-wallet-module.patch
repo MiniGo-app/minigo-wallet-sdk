@@ -1,4 +1,4 @@
-From 3d4fcbe33c64fc476a45e4ef581f8de874a43d7b Mon Sep 17 00:00:00 2001
+From ffea4071ed43a7350c81f11bdcfe28c0f9e9aecf Mon Sep 17 00:00:00 2001
 From: MiniGo <dev@minigo.app>
 Date: Mon, 28 Sep 2026 17:05:24 +0000
 Subject: [PATCH] feat: add MiniGo wallet module
@@ -17,10 +17,10 @@ sep43Modules().
  src/build_npm.ts                        |   4 +
  src/deno.json                           |   1 +
  src/deno.lock                           |  12 +-
- src/sdk/modules/minigo.module.test.ts   | 141 +++++++++++++++++++
- src/sdk/modules/minigo.module.ts        | 175 ++++++++++++++++++++++++
+ src/sdk/modules/minigo.module.test.ts   | 141 ++++++++++++++++++++
+ src/sdk/modules/minigo.module.ts        | 164 ++++++++++++++++++++++++
  src/sdk/modules/utils.ts                |   3 +
- 8 files changed, 341 insertions(+), 2 deletions(-)
+ 8 files changed, 330 insertions(+), 2 deletions(-)
  create mode 100644 src/sdk/modules/minigo.module.test.ts
  create mode 100644 src/sdk/modules/minigo.module.ts
 
@@ -277,23 +277,16 @@ index 0000000..89b8acc
 +});
 diff --git a/src/sdk/modules/minigo.module.ts b/src/sdk/modules/minigo.module.ts
 new file mode 100644
-index 0000000..6d604ac
+index 0000000..2e51ebb
 --- /dev/null
 +++ b/src/sdk/modules/minigo.module.ts
-@@ -0,0 +1,175 @@
+@@ -0,0 +1,164 @@
 +import { type ModuleInterface, ModuleType } from "../../types/mod.ts";
 +import { parseError } from "../utils.ts";
 +
 +/**
-+ * Stellar Wallets Kit module for MiniGo.
-+ *
-+ * MiniGo injects a SEP-43 provider as `window.mini` — in its mobile app's in-app browser and in its browser
-+ * extension — together with a frozen detection sentinel `window.stellar = { provider: "minigo", platform }`.
-+ * The provider never throws: methods resolve with `{ ..., error? }`, so this module unwraps `error` into a
-+ * rejection to match the kit's throw-on-failure contract.
-+ *
-+ * It talks to `window.mini` directly (not through `@stellar/freighter-api`) so it always targets MiniGo, even
-+ * when Freighter is also installed, and has no dependencies.
++ * Stellar Wallets Kit module for MiniGo. It talks to `window.mini` (SEP-43) directly, so it targets MiniGo even when
++ * Freighter is installed. The provider resolves with `{ error }` instead of throwing, so errors are unwrapped here.
 + */
 +
 +type ProviderError = { code: number; message: string; ext?: string[] };
@@ -328,10 +321,7 @@ index 0000000..6d604ac
 +
 +export const MINIGO_ID: string = "minigo";
 +
-+/**
-+ * How long isAvailable() waits for the provider to appear. The provider is injected before page scripts, so
-+ * this only covers unusual load orders; it stays inside the kit's 1000ms isAvailable budget.
-+ */
++// The provider is injected before page scripts, so this only covers odd load orders. The kit allows 1000 ms.
 +const MINIGO_AVAILABILITY_WAIT_MS = 600;
 +
 +export class MiniGoModule implements ModuleInterface {
@@ -370,7 +360,6 @@ index 0000000..6d604ac
 +    });
 +  }
 +
-+  /** Inside MiniGo's own app browser, the kit can pick MiniGo without asking. */
 +  isPlatformWrapper(): Promise<boolean> {
 +    const w = win();
 +    return Promise.resolve(w?.stellar?.provider === "minigo" && w.stellar.platform === "mobile");

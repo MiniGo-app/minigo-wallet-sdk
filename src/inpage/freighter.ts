@@ -2,13 +2,8 @@ import { invalidRequest, type WalletError } from "../core/errors.ts";
 import { selfOrigin } from "../protocol.ts";
 import type { Call } from "./provider.ts";
 
-// Freighter compatibility (fallback). Many Stellar dApps only speak Freighter — directly through
-// `@stellar/freighter-api`, or through Stellar Wallets Kit's default Freighter module. Where no real
-// Freighter can exist (inside the MiniGo app), or when the user opts in on the extension, MiniGo answers
-// Freighter's page messages itself, backed by the same host calls as `window.mini`.
-//
-// Protocol source: @stellar/freighter-api 6.x (`@shared/api/external.ts`). Note Freighter's own spelling of
-// `messagedId` in responses.
+// Answers @stellar/freighter-api 6.x page messages for dApps that only speak Freighter. Freighter really does
+// spell it `messagedId` in responses.
 
 const REQUEST = "FREIGHTER_EXTERNAL_MSG_REQUEST";
 const RESPONSE = "FREIGHTER_EXTERNAL_MSG_RESPONSE";
